@@ -3,6 +3,8 @@ import { Bullet } from './Bullet';
 import { Enemy } from './Enemy';
 const { ccclass, property } = _decorator;
 
+export const PLAYER_HP_CHANGED_EVENT = 'player-hp-changed';
+
 export enum BulletLevel {
     Level1 = 1,
     Level2 = 2,
@@ -49,6 +51,9 @@ export class Player extends Component {
     @property({ type: Enum(BulletLevel) })
     bulletLevel: BulletLevel = BulletLevel.Level1;
 
+    @property
+    bulletLevelUpDuration: number = 10;
+
     //累计发射计时器：用来控制“按固定间隔发射”
     private fireElapsed = 0;
     private draggingTouchId: number | null = null;
@@ -81,7 +86,8 @@ export class Player extends Component {
     // 当前生命值：在 onLoad 时重置为 maxHp
     private hp = 0;
     // 无敌剩余时间（秒）：大于 0 时忽略碰撞伤害
-    private invincibleRemaining = 1;
+    private invincibleRemaining = 0;
+    private bulletLevelUpRemaining = 0;
     // 碰撞回调里不做破坏性操作，先打标记，等 update 再统一处理
     private hitQueued = false;
     // 本帧待处理的敌机（延迟执行 enemy.onHit()，避免碰撞回调里销毁导致 Box2D 报错）
@@ -90,6 +96,7 @@ export class Player extends Component {
 
     protected onLoad(): void {
         this.hp = this.maxHp;
+        this.emitHpChanged();
         //触摸开始/移动/结束事件
         input.on(Input.EventType.TOUCH_START, this.onTouchStart, this);
         input.on(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
@@ -119,6 +126,7 @@ export class Player extends Component {
     }
 
     onTouchStart(event: EventTouch): void {
+        if (this.destroyScheduled) return;
         //只允许一根手指拖拽，防止多指干扰
         if (this.draggingTouchId !== null) return;
         //记录当前拖拽手指的 id，后续 move/end 只响应它
@@ -141,11 +149,13 @@ export class Player extends Component {
         this.node.setPosition(nextX, nextY, position.z);
     }
     onTouchEnd(event: EventTouch): void {
+        if (this.destroyScheduled) return;
         if (this.draggingTouchId !== event.getID()) return;
         this.draggingTouchId = null;
     }
 
     onTouchCancel(event: EventTouch): void {
+        if (this.destroyScheduled) return;
         //系统打断/触摸被取消时，结束拖拽状态
         if (this.draggingTouchId !== event.getID()) return;
         this.draggingTouchId = null;
@@ -155,10 +165,17 @@ export class Player extends Component {
     }
 
     update(deltaTime: number) {
+        if (this.destroyScheduled) return;
         // 把碰撞回调里累积的“受击事件”放到 update 里处理，避免物理回调时销毁节点
         this.flushPendingHits();
         if (this.invincibleRemaining > 0) {
             this.invincibleRemaining = Math.max(0, this.invincibleRemaining - deltaTime);
+        }
+        if (this.bulletLevelUpRemaining > 0) {
+            this.bulletLevelUpRemaining = Math.max(0, this.bulletLevelUpRemaining - deltaTime);
+            if (this.bulletLevelUpRemaining <= 0 && this.bulletLevel === BulletLevel.Level2) {
+                this.bulletLevel = BulletLevel.Level1;
+            }
         }
         //没有配置子弹 Prefab 时，不进行发射
         if (!this.getActiveBulletPrefab()) return;
@@ -244,9 +261,16 @@ export class Player extends Component {
     }
 
     public upgradeBulletLevel(): void {
-        if (this.bulletLevel === BulletLevel.Level1) {
-            this.bulletLevel = BulletLevel.Level2;
-        }
+        this.bulletLevel = BulletLevel.Level2;
+        this.bulletLevelUpRemaining = Math.max(0, this.bulletLevelUpDuration);
+    }
+
+    public getHp(): number {
+        return this.hp;
+    }
+
+    public getMaxHp(): number {
+        return this.maxHp;
     }
 
     private getActiveBulletPrefab(): Prefab | null {
@@ -281,6 +305,7 @@ export class Player extends Component {
         if (dmg <= 0) return;
 
         this.hp -= dmg;
+        this.emitHpChanged();
         // 进入无敌状态，并播放受击动画
         this.invincibleRemaining = Math.max(0, this.invincibleDuration);
         this.playHit();
@@ -288,6 +313,10 @@ export class Player extends Component {
         if (this.hp <= 0) {
             this.destroySelf();
         }
+    }
+
+    private emitHpChanged(): void {
+        this.node.emit(PLAYER_HP_CHANGED_EVENT, this.hp, this.maxHp);
     }
 
     private playHit(): void {

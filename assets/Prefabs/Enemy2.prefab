@@ -63,7 +63,7 @@
       "z": 1
     },
     "_mobility": 0,
-    "_layer": 33554432,
+    "_layer": 1,
     "_euler": {
       "__type__": "cc.Vec3",
       "x": 0,
@@ -113,7 +113,7 @@
       "z": 1
     },
     "_mobility": 0,
-    "_layer": 33554432,
+    "_layer": 1,
     "_euler": {
       "__type__": "cc.Vec3",
       "x": 0,
@@ -383,6 +383,7 @@
       "__id__": 0
     },
     "fileId": "46BAW20rBLEYKc5CunIlcu",
+    "instance": null,
     "targetOverrides": []
   }
 ]
