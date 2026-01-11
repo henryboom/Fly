@@ -17,11 +17,16 @@ export class GameManager extends Component {
     @property
     doubleTapInterval: number = 0.3;
 
+
+    @property
+    score: number = 100;
     private bombCount = 0;
     private lastTapTime = 0;
 
+
     protected onLoad(): void {
         GameManager.instance = this;
+        this.score = 0;
         input.on(Input.EventType.TOUCH_END, this.onTouchEnd, this);
         this.emitBombCountChanged();
     }
@@ -39,6 +44,15 @@ export class GameManager extends Component {
 
     public getBombCount(): number {
         return this.bombCount;
+    }
+
+    public addScore(amount: number): void {
+        const add = Math.max(0, amount);
+        this.score += add;
+    }
+
+    public getScore(): number {
+        return this.score;
     }
 
     public tryUseBomb(): boolean {

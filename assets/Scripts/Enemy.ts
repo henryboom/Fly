@@ -1,5 +1,6 @@
 import { _decorator, Animation, AnimationClip, Collider2D, Component, Contact2DType, Enum, IPhysics2DContact, isValid, Node, UITransform } from 'cc';
 import { Bullet } from './Bullet';
+import { GameManager } from './GameManager';
 const { ccclass, property } = _decorator;
 
 // 敌机类型：用于区分不同体型/速度/出场逻辑（例如后续可扩展不同血量/分数等）
@@ -56,6 +57,9 @@ export class Enemy extends Component {
     // 敌机血量：子弹命中后扣减，<=0 时触发 onHit()
     @property
     hp: number = 1;
+
+    @property
+    score: number = 1;
 
     // 是否已进入“被击中/死亡”状态：进入后不再移动也不再重复处理命中
     private isHit = false;
@@ -119,6 +123,7 @@ export class Enemy extends Component {
     onHit(): void {
         if (this.isHit) return;
         this.isHit = true;
+        GameManager.instance?.addScore(this.score);
         if (this.collider) this.collider.enabled = false;// 停用碰撞检测，避免重复命中
 
         if (this.anim) {
