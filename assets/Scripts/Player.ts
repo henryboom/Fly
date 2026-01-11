@@ -1,5 +1,6 @@
-import { _decorator, Component, Enum, EventTouch, Input, input, instantiate, Node, Prefab } from 'cc';
+import { _decorator, Animation, AnimationClip, Collider2D, Component, Contact2DType, Enum, EventTouch, Input, input, instantiate, IPhysics2DContact, isValid, Node, Prefab } from 'cc';
 import { Bullet } from './Bullet';
+import { Enemy } from './Enemy';
 const { ccclass, property } = _decorator;
 
 export enum BulletLevel {
@@ -31,7 +32,7 @@ export class Player extends Component {
 
     //子弹飞行速度：会写入 Bullet1 脚本的 speed 字段（像素/秒）
     @property
-    bulletSpeed: number = 800;
+    bulletSpeed: number = 400;
 
     //子弹发射点：在飞机下面挂一个“虚拟节点”，把它拖到这里
     //发射时会读取这个节点的世界坐标，让子弹从机头位置出现
@@ -55,13 +56,53 @@ export class Player extends Component {
     private readonly maxX = 226;
     private readonly minY = -387;
     private readonly maxY = 360;
+    private collider: Collider2D | null = null;
+
+    // 玩家最大生命值
+    @property
+    maxHp: number = 3;
+
+    // 受击后的无敌时间（秒），用于避免与敌机持续接触导致连掉血
+    @property
+    invincibleDuration: number = 1;
+
+    // 受击反馈动画（可不配，不影响逻辑）
+    @property({ type: Animation })
+    anim: Animation = null;
+
+    // 坠毁动画
+    @property({ type: AnimationClip })
+    crashClip: AnimationClip | null = null;
+
+    // 受击反馈动画（可不配，不影响逻辑）
+    @property({ type: AnimationClip })
+    hitClip: AnimationClip | null = null;
+
+    // 当前生命值：在 onLoad 时重置为 maxHp
+    private hp = 0;
+    // 无敌剩余时间（秒）：大于 0 时忽略碰撞伤害
+    private invincibleRemaining = 1;
+    // 碰撞回调里不做破坏性操作，先打标记，等 update 再统一处理
+    private hitQueued = false;
+    // 本帧待处理的敌机（延迟执行 enemy.onHit()，避免碰撞回调里销毁导致 Box2D 报错）
+    private pendingHitEnemies = new Set<Node>();
+    private destroyScheduled = false;//是否计划销毁玩家节点
 
     protected onLoad(): void {
+        this.hp = this.maxHp;
         //触摸开始/移动/结束事件
         input.on(Input.EventType.TOUCH_START, this.onTouchStart, this);
         input.on(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
         input.on(Input.EventType.TOUCH_END, this.onTouchEnd, this);
         input.on(Input.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
+
+
+        this.collider = this.getComponent(Collider2D);
+        if (this.collider) {
+            this.collider.off(Contact2DType.BEGIN_CONTACT, this.onBeginContact, this);
+            this.collider.on(Contact2DType.BEGIN_CONTACT, this.onBeginContact, this);
+        }
+
     }
     protected onDestroy(): void {
         //移除触摸开始事件
@@ -72,6 +113,9 @@ export class Player extends Component {
         input.off(Input.EventType.TOUCH_END, this.onTouchEnd, this);
         //移除触摸取消事件
         input.off(Input.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
+        if (this.collider) {
+            this.collider.off(Contact2DType.BEGIN_CONTACT, this.onBeginContact, this);
+        }
     }
 
     onTouchStart(event: EventTouch): void {
@@ -82,6 +126,8 @@ export class Player extends Component {
     }
 
     onTouchMove(event: EventTouch): void {
+        //坠机后，不允许拖拽移动
+        if (this.destroyScheduled) return;
         if (this.draggingTouchId !== event.getID()) return;
         //获取本次触摸相对上一帧的位移（增量）
         let delta = event.getDelta();
@@ -109,6 +155,11 @@ export class Player extends Component {
     }
 
     update(deltaTime: number) {
+        // 把碰撞回调里累积的“受击事件”放到 update 里处理，避免物理回调时销毁节点
+        this.flushPendingHits();
+        if (this.invincibleRemaining > 0) {
+            this.invincibleRemaining = Math.max(0, this.invincibleRemaining - deltaTime);
+        }
         //没有配置子弹 Prefab 时，不进行发射
         if (!this.getActiveBulletPrefab()) return;
         //发射速率为 0 或负数时，视为关闭自动发射
@@ -128,6 +179,22 @@ export class Player extends Component {
         }
     }
 
+
+    onBeginContact(selfCollider: Collider2D, otherCollider: Collider2D, contact: IPhysics2DContact | null): void {
+        if (this.destroyScheduled) return;
+        const enemy = otherCollider.getComponent(Enemy);
+        if (!enemy) return;
+        // 无敌期间不受伤
+        if (this.invincibleRemaining > 0) return;
+        // 同一帧多次回调只处理一次扣血（避免一次接触触发多次 BEGIN_CONTACT）
+        if (this.hitQueued) return;
+
+        const enemyNode = otherCollider.node;
+        if (!isValid(enemyNode, true)) return;
+
+        this.hitQueued = true;
+        this.pendingHitEnemies.add(enemyNode);
+    }
     private shoot(): void {
         if (this.bulletLevel === BulletLevel.Level2) {
             this.onshoot();
@@ -151,8 +218,8 @@ export class Player extends Component {
         const leftPos = left.getWorldPosition();
         const rightPos = right.getWorldPosition();
 
-        this.spawnBullet(leftPos.x, leftPos.y, leftPos.z, 900);
-        this.spawnBullet(rightPos.x, rightPos.y, rightPos.z, 900);
+        this.spawnBullet(leftPos.x, leftPos.y, leftPos.z, this.bulletSpeed);
+        this.spawnBullet(rightPos.x, rightPos.y, rightPos.z, this.bulletSpeed);
     }
 
     private spawnBullet(worldX: number, worldY: number, worldZ: number, speedOverride?: number): void {
@@ -188,6 +255,68 @@ export class Player extends Component {
         }
 
         return this.bulletPrefab;
+    }
+
+    private flushPendingHits(): void {
+        if (!this.hitQueued) return;
+        this.hitQueued = false;
+
+        if (this.pendingHitEnemies.size > 0) {
+            // 玩家撞到敌机：敌机直接进入死亡/爆炸流程
+            for (const enemyNode of this.pendingHitEnemies) {
+                if (!isValid(enemyNode, true)) continue;
+                const enemy = enemyNode.getComponent(Enemy);
+                if (enemy) enemy.onHit();
+            }
+            this.pendingHitEnemies.clear();
+        }
+
+        // 玩家扣血：这里先按 1 点处理，后续你也可以改成由敌机类型/伤害值决定
+        this.applyDamage(1);
+    }
+
+    private applyDamage(amount: number): void {
+        if (this.destroyScheduled) return;
+        const dmg = Math.max(0, amount);
+        if (dmg <= 0) return;
+
+        this.hp -= dmg;
+        // 进入无敌状态，并播放受击动画
+        this.invincibleRemaining = Math.max(0, this.invincibleDuration);
+        this.playHit();
+
+        if (this.hp <= 0) {
+            this.destroySelf();
+        }
+    }
+
+    private playHit(): void {
+        if (!this.anim || !this.hitClip) return;
+        this.anim.defaultClip = this.hitClip;
+        this.anim.play();
+    }
+
+    private destroySelf(): void {
+        if (this.destroyScheduled) return;
+        this.destroyScheduled = true;
+        // 禁用碰撞器，防止继续触发碰撞事件
+        if (this.collider) this.collider.enabled = false;
+
+        // 播放坠毁动画，等动画播完再销毁
+        if (this.anim && this.crashClip) {
+            this.anim.once(Animation.EventType.FINISHED, this.destroyNow, this);
+            this.anim.defaultClip = this.crashClip;
+            this.anim.play();
+            this.scheduleOnce(this.destroyNow, Math.max(0, this.crashClip.duration) + 0.05);
+            return;
+        }
+
+        this.destroyNow();
+    }
+
+    private destroyNow(): void {
+        if (!isValid(this.node, true)) return;
+        this.node.destroy();
     }
 }
 
