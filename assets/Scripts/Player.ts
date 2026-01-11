@@ -1,6 +1,7 @@
 import { _decorator, Animation, AnimationClip, Collider2D, Component, Contact2DType, Enum, EventTouch, Input, input, instantiate, IPhysics2DContact, isValid, Node, Prefab } from 'cc';
 import { Bullet } from './Bullet';
 import { Enemy } from './Enemy';
+import { GameManager } from './GameManager';
 const { ccclass, property } = _decorator;
 
 export const PLAYER_HP_CHANGED_EVENT = 'player-hp-changed';
@@ -127,6 +128,7 @@ export class Player extends Component {
 
     onTouchStart(event: EventTouch): void {
         if (this.destroyScheduled) return;
+        if (GameManager.instance.isPaused()) return;
         //只允许一根手指拖拽，防止多指干扰
         if (this.draggingTouchId !== null) return;
         //记录当前拖拽手指的 id，后续 move/end 只响应它
@@ -134,7 +136,8 @@ export class Player extends Component {
     }
 
     onTouchMove(event: EventTouch): void {
-        //坠机后，不允许拖拽移动
+        //坠机后或者暂停后，不允许拖拽移动
+        if (GameManager.instance.isPaused()) return;
         if (this.destroyScheduled) return;
         if (this.draggingTouchId !== event.getID()) return;
         //获取本次触摸相对上一帧的位移（增量）

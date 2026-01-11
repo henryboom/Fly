@@ -1,4 +1,4 @@
-import { _decorator, Component, Input, input, Node } from 'cc';
+import { _decorator, Component, director, Input, input, Label, Node } from 'cc';
 import { Enemy } from './Enemy';
 const { ccclass, property } = _decorator;
 
@@ -20,13 +20,27 @@ export class GameManager extends Component {
 
     @property
     score: number = 100;
+
+    @property({ type: Label })
+    scoreLabel: Label | null = null;
+
+    @property({ type: Node })
+    pauseButton: Node | null = null;
+
+    @property({ type: Node })
+    resumeButton: Node | null = null;
+
     private bombCount = 0;
     private lastTapTime = 0;
+    private paused = false;
 
 
     protected onLoad(): void {
         GameManager.instance = this;
         this.score = 0;
+        //初始化节点图标显示
+        if (this.pauseButton) this.pauseButton.active = true;
+        if (this.resumeButton) this.resumeButton.active = false;
         input.on(Input.EventType.TOUCH_END, this.onTouchEnd, this);
         this.emitBombCountChanged();
     }
@@ -49,10 +63,34 @@ export class GameManager extends Component {
     public addScore(amount: number): void {
         const add = Math.max(0, amount);
         this.score += add;
+        if (this.scoreLabel) this.scoreLabel.string = this.score.toString();
     }
 
     public getScore(): number {
         return this.score;
+    }
+
+    public pauseGame(): void {
+        if (this.paused) return;
+        //改变节点图标显示
+        if (this.pauseButton) this.pauseButton.active = false;
+        if (this.resumeButton) this.resumeButton.active = true;
+
+        this.paused = true;
+        director.pause();
+    }
+
+    public resumeGame(): void {
+        if (!this.paused) return;
+        //改变节点图标显示
+        if (this.pauseButton) this.pauseButton.active = true;
+        if (this.resumeButton) this.resumeButton.active = false;
+        this.paused = false;
+        director.resume();
+    }
+
+    public isPaused(): boolean {
+        return this.paused;
     }
 
     public tryUseBomb(): boolean {
