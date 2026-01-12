@@ -203,6 +203,14 @@
     },
     "pickupClip": null,
     "enemyRoot": null,
+    "pickupAudio1": {
+      "__uuid__": "29381d7a-ba0d-4e1d-a20e-5342569af585",
+      "__expectedType__": "cc.AudioClip"
+    },
+    "pickupAudio2": {
+      "__uuid__": "2af51da5-c34d-426b-8244-78a44a592096",
+      "__expectedType__": "cc.AudioClip"
+    },
     "_id": ""
   },
   {

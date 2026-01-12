@@ -301,6 +301,10 @@
     },
     "hp": 10,
     "score": 50,
+    "enemyDownAudio": {
+      "__uuid__": "b44a4bf3-43eb-4531-9eb4-df5595b46ab7",
+      "__expectedType__": "cc.AudioClip"
+    },
     "_id": ""
   },
   {

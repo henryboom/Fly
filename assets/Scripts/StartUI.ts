@@ -12,7 +12,7 @@ export class StartUI extends Component {
     }
 
     public onStartButtonClick() {
-        console.log("111111111111111")
+        // console.log("111111111111111")
         director.loadScene("02-GameScene");
     }
 }

@@ -1,7 +1,8 @@
-import { _decorator, Animation, AnimationClip, Collider2D, Component, Contact2DType, Enum, EventTouch, Input, input, instantiate, IPhysics2DContact, isValid, Node, Prefab } from 'cc';
+import { _decorator, Animation, AnimationClip, AudioClip, Collider2D, Component, Contact2DType, Enum, EventTouch, Input, input, instantiate, IPhysics2DContact, isValid, Node, Prefab } from 'cc';
 import { Bullet } from './Bullet';
 import { Enemy } from './Enemy';
 import { GameManager } from './GameManager';
+import { AudioMgr } from './AudioMgr';
 const { ccclass, property } = _decorator;
 
 export const PLAYER_HP_CHANGED_EVENT = 'player-hp-changed';
@@ -84,6 +85,9 @@ export class Player extends Component {
     @property({ type: AnimationClip })
     hitClip: AnimationClip | null = null;
 
+
+    @property({ type: AudioClip })
+    bulletAudio: AudioClip | null = null;
     // 当前生命值：在 onLoad 时重置为 maxHp
     private hp = 0;
     // 无敌剩余时间（秒）：大于 0 时忽略碰撞伤害
@@ -226,12 +230,18 @@ export class Player extends Component {
     }
 
     private onshoot(): void {
+        if (this.bulletAudio) {
+            AudioMgr.inst.playOneShot(this.bulletAudio, 0.2);
+        }
         const fireNode = this.firePoint ?? this.node;
         const worldPos = fireNode.getWorldPosition();
         this.spawnBullet(worldPos.x, worldPos.y, worldPos.z);
     }
 
     private twoshoot(): void {
+        if (this.bulletAudio) {
+            AudioMgr.inst.playOneShot(this.bulletAudio, 0.2);
+        }
         const left = this.firePointLv2 ?? this.firePoint ?? this.node;
         const right = this.firePointLv3 ?? this.firePoint ?? this.node;
 
@@ -339,6 +349,7 @@ export class Player extends Component {
             this.anim.once(Animation.EventType.FINISHED, this.destroyNow, this);
             this.anim.defaultClip = this.crashClip;
             this.anim.play();
+
             this.scheduleOnce(this.destroyNow, Math.max(0, this.crashClip.duration) + 0.05);
             return;
         }
@@ -348,6 +359,9 @@ export class Player extends Component {
 
     private destroyNow(): void {
         if (!isValid(this.node, true)) return;
+        // 通知游戏管理器玩家死亡
+        const manager = GameManager.instance;
+        if (manager) manager.gameOver();
         this.node.destroy();
     }
 }

@@ -1,7 +1,8 @@
-import { _decorator, Animation, AnimationClip, Collider2D, Component, Contact2DType, Enum, IPhysics2DContact, isValid, Node, UITransform } from 'cc';
+import { _decorator, Animation, AnimationClip, AudioClip, Collider2D, Component, Contact2DType, Enum, IPhysics2DContact, isValid, Node, UITransform } from 'cc';
 import { Enemy } from './Enemy';
 import { GameManager } from './GameManager';
 import { Player, PowerUpType } from './Player';
+import { AudioMgr } from './AudioMgr';
 const { ccclass, property } = _decorator;
 
 export enum RewardType {
@@ -46,6 +47,11 @@ export class Reward extends Component {
     @property({ type: Node })
     enemyRoot: Node | null = null;
 
+    @property({ type: AudioClip })
+    pickupAudio1: AudioClip | null = null;
+    @property({ type: AudioClip })
+    pickupAudio2: AudioClip | null = null;
+
     private collider: Collider2D | null = null;
     // 是否已被拾取：拾取后停止移动与出屏检测
     private picked = false;
@@ -89,7 +95,7 @@ export class Reward extends Component {
     }
 
     onBeginContact(selfCollider: Collider2D, otherCollider: Collider2D, contact: IPhysics2DContact | null): void {
-        console.log('onBeginContact', selfCollider.node.name, otherCollider.node.name, contact);
+        // console.log('onBeginContact', selfCollider.node.name, otherCollider.node.name, contact);
         // 已拾取 / 已排队结算，就不再重复处理
         if (this.picked || this.pickupQueued) return;
         // 只响应 Player 的拾取
@@ -141,12 +147,20 @@ export class Reward extends Component {
     private applyReward(player: Player): void {
         // 1) 升级子弹：复用 Player 现有的 PowerUp 流程
         if (this.rewardType === RewardType.BulletLevelUp) {
+            if (this.pickupAudio1) {
+                AudioMgr.inst.playOneShot(this.pickupAudio1, 0.8);
+            }
             player.applyPowerUp(PowerUpType.BulletLevelUp);
             return;
         }
 
         // 2) 炸弹：存入库存（最多 5 个），双击屏幕再触发清屏
         if (this.rewardType === RewardType.Bomb) {
+            // console.log('applyReward Bomb', this.pickupAudio2);
+            if (this.pickupAudio2) {
+
+                AudioMgr.inst.playOneShot(this.pickupAudio2, 0.8);
+            }
             GameManager.instance?.addBomb(1);
         }
     }
